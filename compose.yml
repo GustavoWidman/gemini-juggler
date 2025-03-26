@@ -1,0 +1,10 @@
+services:
+    gemini-juggler:
+        build: .
+        image: gemini-juggler
+        container_name: gemini-juggler
+        restart: unless-stopped
+        volumes:
+            - type: bind
+              source: ./config.toml
+              target: /config.toml
