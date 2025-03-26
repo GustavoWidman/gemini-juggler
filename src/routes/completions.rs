@@ -40,7 +40,6 @@ async fn completion(
 			.post(format!(
 				"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_api_key}"
 			))
-			.timeout(std::time::Duration::new(180, 0)) // 3 minutes timeout
 			.no_decompress()
 			.send_json(&body)
 			.await

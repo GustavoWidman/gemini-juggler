@@ -35,7 +35,7 @@ async fn main() -> std::io::Result<()> {
             ))
             .app_data(web::Data::new(AppState {
                 config: config.clone(),
-                client: Arc::new(awc::Client::new()),
+                client: Arc::new(awc::Client::builder().disable_timeout().finish()),
                 juggler: Arc::new(RwLock::new(KeyJuggler::new(config.keys.clone()))),
             }))
             .service(routes::completion)
