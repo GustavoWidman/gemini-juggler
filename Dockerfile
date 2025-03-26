@@ -2,7 +2,7 @@
 
 FROM rust:1-alpine AS builder
 
-RUN apk add --no-cache musl-dev sqlite-static openssl-dev openssl-libs-static pkgconf git libpq-dev
+RUN apk add --no-cache musl-dev sqlite-static openssl-dev openssl-libs-static pkgconf git libpq-dev ca-certificates tzdata
 ENV SYSROOT=/dummy
 
 COPY ./Cargo.lock ./Cargo.lock
@@ -17,5 +17,6 @@ RUN --mount=type=cache,target=/target/ \
 
 FROM scratch
 COPY --from=builder /app /app
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 CMD ["/app"]
