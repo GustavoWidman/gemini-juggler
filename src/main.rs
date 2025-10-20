@@ -1,8 +1,9 @@
 use std::sync::{Arc, RwLock};
 
-use actix_web::{App, HttpServer, middleware::Logger, web};
+use actix_web::{App, HttpServer, web};
 use easy_config_store::ConfigStore;
 use log::LevelFilter;
+use utils::HttpLogger;
 use utils::KeyJuggler;
 
 mod config;
@@ -18,7 +19,7 @@ pub struct AppState {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    utils::Logger::init(Some(LevelFilter::Info));
+    utils::Logger::init(LevelFilter::Info);
 
     let config: Arc<ConfigStore<config::Config>> = Arc::new(
         ConfigStore::read("config.toml")
@@ -30,15 +31,14 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            .wrap(Logger::new(
-                "%a | %{r}a \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\" %D",
-            ))
+            .wrap(HttpLogger)
             .app_data(web::Data::new(AppState {
                 config: config.clone(),
                 client: Arc::new(awc::Client::builder().disable_timeout().finish()),
                 juggler: Arc::new(RwLock::new(KeyJuggler::new(config.keys.clone()))),
             }))
             .service(routes::completion)
+            .service(routes::openai_completion)
         // .service(serve::download)
         // .service(serve::login)
     })

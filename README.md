@@ -34,7 +34,23 @@ Gemini Juggler is a Rust web service built on Actix-Web that forwards content ge
    ```
 
 3. The server will start at the host and port defined in `config.toml`.
-   Example endpoint: `POST http://0.0.0.0:8080/v1beta/models/{model}:generateContent?key={api_key}`
+
+## Endpoints
+
+The service provides two types of endpoints:
+
+### Standard Gemini API Endpoint
+```
+POST http://0.0.0.0:8080/v1beta/models/{model}:generateContent?key={api_key}
+```
+This endpoint mirrors the standard Gemini API format.
+
+### OpenAI-Compatible Endpoint
+```
+POST http://0.0.0.0:8080/v1beta/openai/chat/completions
+Authorization: Bearer {api_key}
+```
+This endpoint provides OpenAI-compatible API access to Gemini models, allowing you to use OpenAI client libraries with Gemini. Authentication uses the Bearer token format in the Authorization header.
 
 ## Configuration
 
