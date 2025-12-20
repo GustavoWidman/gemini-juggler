@@ -35,17 +35,20 @@ async fn openai_completion(
     let body = body.into_inner();
 
     // Check if streaming is requested
-    let is_streaming = body.get("stream").and_then(|v| v.as_bool()).unwrap_or(false);
+    let is_streaming = body
+        .get("stream")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
-    let mut juggler = data.juggler.write().map_err(|e| {
-        actix_web::error::ErrorInternalServerError(format!("Error locking juggler: {}", e))
-    })?;
+    let mut juggler = data.juggler.write().await;
     let mut gemini_api_key = juggler.current();
 
     if is_streaming {
         // Streaming mode
         let gemini_response = loop {
-            log::debug!("Forwarding streaming OpenAI-compatible request to Gemini, using key {gemini_api_key}");
+            log::debug!(
+                "Forwarding streaming OpenAI-compatible request to Gemini, using key {gemini_api_key}"
+            );
             let mut gemini_response = data
                 .client
                 .post("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
@@ -73,7 +76,7 @@ async fn openai_completion(
                         juggler
                             .ratelimit()
                             .ok_or(actix_web::error::ErrorTooManyRequests(
-                                "All API keys are ratelimited"
+                                "All API keys are ratelimited",
                             ))?;
 
                     continue;
@@ -103,7 +106,9 @@ async fn openai_completion(
     } else {
         // Non-streaming mode (original behavior)
         let (gemini_response, response_body, status_code) = loop {
-            log::debug!("Forwarding OpenAI-compatible request to Gemini, using key {gemini_api_key}");
+            log::debug!(
+                "Forwarding OpenAI-compatible request to Gemini, using key {gemini_api_key}"
+            );
             let mut gemini_response = data
                 .client
                 .post("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
@@ -131,7 +136,7 @@ async fn openai_completion(
                         juggler
                             .ratelimit()
                             .ok_or(actix_web::error::ErrorTooManyRequests(
-                                "All API keys are ratelimited"
+                                "All API keys are ratelimited",
                             ))?;
 
                     continue;

@@ -53,7 +53,7 @@ impl KeyJuggler {
     }
 
     fn next_unratelimited(&mut self) -> Option<&Key> {
-        let old_index = self.current_index.clone();
+        let old_index = self.current_index;
         loop {
             let next_index = self.next();
 
@@ -105,14 +105,14 @@ impl KeyJuggler {
             if (current_time - ratelimited_at) > chrono::Duration::days(1) {
                 // key is no longer ratelimited
                 key.ratelimited_at = None;
-                return false;
+                false
             } else {
                 // key is still ratelimited
-                return true;
+                true
             }
         } else {
             // key was never ratelimited
-            return false;
+            false
         }
     }
 }

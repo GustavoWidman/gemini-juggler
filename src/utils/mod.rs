@@ -1,3 +1,5 @@
+pub mod cli;
+pub mod config;
 mod http_logger;
 mod juggler;
 mod log;

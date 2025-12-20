@@ -31,11 +31,12 @@ async fn completion(
     let body = body.into_inner();
 
     // Check if streaming is requested
-    let is_streaming = body.get("stream").and_then(|v| v.as_bool()).unwrap_or(false);
+    let is_streaming = body
+        .get("stream")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
-    let mut juggler = data.juggler.write().map_err(|e| {
-        actix_web::error::ErrorInternalServerError(format!("Error locking juggler: {}", e))
-    })?;
+    let mut juggler = data.juggler.write().await;
     let mut gemini_api_key = juggler.current();
 
     if is_streaming {
@@ -69,7 +70,7 @@ async fn completion(
                         juggler
                             .ratelimit()
                             .ok_or(actix_web::error::ErrorTooManyRequests(
-                                "All API keys are ratelimited"
+                                "All API keys are ratelimited",
                             ))?;
 
                     continue;
@@ -127,7 +128,7 @@ async fn completion(
                         juggler
                             .ratelimit()
                             .ok_or(actix_web::error::ErrorTooManyRequests(
-                                "All API keys are ratelimited"
+                                "All API keys are ratelimited",
                             ))?;
 
                     continue;
