@@ -3,16 +3,16 @@ use std::sync::Arc;
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, web};
 use clap::Parser;
-use colored::Colorize;
 use eyre::Result;
+use log::info;
 use tokio::sync::RwLock;
 
 mod routes;
 mod utils;
 
-use utils::{HttpLogger, KeyJuggler, Logger};
 use crate::utils::cli::Args;
 use crate::utils::config::config;
+use utils::{HttpLogger, KeyJuggler, Logger};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -22,34 +22,45 @@ pub struct AppState {
 }
 
 impl AppState {
-    fn new(config: utils::Config) -> Self {
+    fn new(config: utils::Config, juggler: Arc<RwLock<KeyJuggler>>) -> Self {
         Self {
             config: config.clone(),
             #[allow(clippy::arc_with_non_send_sync)]
             client: Arc::new(awc::Client::builder().disable_timeout().finish()),
-            juggler: Arc::new(RwLock::new(KeyJuggler::new(config.keys.clone()))),
+            juggler,
         }
     }
 }
 
-#[tokio::main]
+#[actix_web::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
     Logger::init(args.verbosity);
 
     let config = config(args.config)?;
     let (host, port) = (config.host.clone(), config.port);
-    let num_keys = config.keys.len();
 
-    log::info!("loaded {} api {}", num_keys.to_string().cyan().bold(), if num_keys == 1 { "key" } else { "keys" });
+    info!("initializing gemini-juggler...");
+
+    let shared_juggler = Arc::new(RwLock::new(KeyJuggler::new(config.keys.clone())));
 
     HttpServer::new(move || {
         App::new()
-            .wrap(Cors::default().allow_any_origin().allow_any_method().allow_any_header().max_age(3600))
+            .wrap(
+                Cors::default()
+                    .allow_any_origin()
+                    .allow_any_method()
+                    .allow_any_header()
+                    .max_age(3600),
+            )
             .wrap(HttpLogger)
-            .app_data(web::Data::new(AppState::new(config.clone())))
+            .app_data(web::Data::new(AppState::new(
+                config.clone(),
+                shared_juggler.clone(),
+            )))
             .service(routes::completion)
             .service(routes::openai_completion)
+            .service(routes::status)
     })
     .bind((host, port))?
     .run()

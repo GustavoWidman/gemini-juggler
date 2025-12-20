@@ -36,7 +36,11 @@ impl CologStyle for CustomLevelTokens {
             .format("%Y-%m-%d %H:%M:%S.%6f")
             .to_string()
             .white();
-        format!("{} {}", timestamp, self.level_color(level, self.level_token(level)))
+        format!(
+            "{} {}",
+            timestamp,
+            self.level_color(level, self.level_token(level))
+        )
     }
 
     fn format(&self, buf: &mut Formatter, record: &Record<'_>) -> Result<(), Error> {
@@ -59,7 +63,8 @@ pub struct Logger;
 impl Logger {
     pub fn init(level: LevelFilter) {
         Builder::new()
-            .filter(None, level)
+            .filter("gemini_juggler".into(), level)
+            .filter("actix".into(), LevelFilter::Info)
             .target(Target::Stdout)
             .format(formatter(CustomLevelTokens))
             .write_style(WriteStyle::Always)
