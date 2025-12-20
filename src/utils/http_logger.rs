@@ -56,19 +56,11 @@ where
 
         Box::pin(async move {
             let res = fut.await?;
-            let elapsed = start.elapsed();
             let status = res.status().as_u16();
-
-            // Format similar to your custom logger
-            let status_colored = colorize_status(status);
+            let elapsed = start.elapsed();
             let duration = format!("{:.2}", Duration::from(elapsed));
-
-            // Align columns using tabs/spaces
-            let path_display = if path.len() > 50 {
-                format!("{:>1}...", &path[..47])
-            } else {
-                path.clone()
-            };
+            let status_colored = colorize_status(status);
+            let path_display = truncate_path(&path, 50);
 
             let log_msg = format!(
                 " {} {} {:>8} {} {:<15} {} {:<7}  {:<50}",
@@ -100,5 +92,13 @@ fn colorize_status(status: u16) -> String {
         400..=499 => status_str.bright_red().to_string(),
         500..=599 => status_str.red().bold().to_string(),
         _ => status_str.white().to_string(),
+    }
+}
+
+fn truncate_path(path: &str, max_len: usize) -> String {
+    if path.len() > max_len {
+        format!("{:>1}...", &path[..max_len - 3])
+    } else {
+        path.to_string()
     }
 }

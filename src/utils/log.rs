@@ -32,34 +32,22 @@ impl CologStyle for CustomLevelTokens {
     }
 
     fn prefix_token(&self, level: &Level) -> String {
-        format!(
-            "{} {}",
-            chrono::Local::now()
-                .format("%Y-%m-%d %H:%M:%S.%6f")
-                .to_string()
-                .white(),
-            self.level_color(level, self.level_token(level)),
-        )
+        let timestamp = chrono::Local::now()
+            .format("%Y-%m-%d %H:%M:%S.%6f")
+            .to_string()
+            .white();
+        format!("{} {}", timestamp, self.level_color(level, self.level_token(level)))
     }
 
     fn format(&self, buf: &mut Formatter, record: &Record<'_>) -> Result<(), Error> {
         let sep = self.line_separator();
         let prefix = self.prefix_token(&record.level());
+        let msg = record.args().to_string().replace('\n', &sep);
 
         let string = match &record.level() {
-            Level::Error => record
-                .args()
-                .to_string()
-                .replace('\n', &sep)
-                .bold()
-                .to_string(),
-            Level::Warn | Level::Info => record.args().to_string().replace('\n', &sep),
-            Level::Debug | Level::Trace => record
-                .args()
-                .to_string()
-                .replace('\n', &sep)
-                .white()
-                .to_string(),
+            Level::Error => msg.bold().to_string(),
+            Level::Warn | Level::Info => msg,
+            Level::Debug | Level::Trace => msg.white().to_string(),
         };
 
         writeln!(buf, "{} {}", prefix, string)

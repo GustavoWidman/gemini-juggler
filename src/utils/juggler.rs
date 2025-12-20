@@ -4,26 +4,26 @@ use std::ops::Deref;
 use chrono::{DateTime, Utc};
 use chrono_tz::America::Los_Angeles;
 use chrono_tz::Tz;
+use colored::Colorize;
 
 pub struct Key {
     pub key: String,
     pub ratelimited_at: Option<DateTime<Tz>>,
 }
+
 impl From<String> for Key {
-    fn from(s: String) -> Self {
-        Self {
-            key: s,
-            ratelimited_at: None,
-        }
+    fn from(key: String) -> Self {
+        Self { key, ratelimited_at: None }
     }
 }
+
 impl Deref for Key {
     type Target = String;
-
     fn deref(&self) -> &Self::Target {
         &self.key
     }
 }
+
 impl Display for Key {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.key)
@@ -32,87 +32,77 @@ impl Display for Key {
 
 pub struct KeyJuggler {
     keys: Vec<Key>,
-    current_index: usize,
 }
 
 impl KeyJuggler {
     pub fn new(keys: Vec<String>) -> Self {
         Self {
             keys: keys.into_iter().map(Key::from).collect(),
-            current_index: 0,
         }
     }
 
-    fn next(&mut self) -> usize {
-        self.current_index += 1;
-        if self.current_index >= self.keys.len() {
-            self.current_index = 0;
-        }
-
-        self.current_index
+    pub fn select(&mut self) -> Option<&Key> {
+        let best_idx = self.find_best_key()?;
+        log::debug!("selected key {} (index {})", self.keys[best_idx].key.cyan(), best_idx.to_string().cyan());
+        Some(&self.keys[best_idx])
     }
 
-    fn next_unratelimited(&mut self) -> Option<&Key> {
-        let old_index = self.current_index;
-        loop {
-            let next_index = self.next();
+    fn find_best_key(&mut self) -> Option<usize> {
+        let current_time = Utc::now().with_timezone(&Los_Angeles);
 
-            if next_index == old_index {
-                log::warn!("All keys are ratelimited, returning None");
-                return None;
+        let mut best_idx: Option<usize> = None;
+        let mut best_score: Option<i64> = None;
+
+        for (idx, key) in self.keys.iter_mut().enumerate() {
+            let is_expired = match key.ratelimited_at {
+                None => false,
+                Some(ratelimited_at) => {
+                    if (current_time - ratelimited_at) > chrono::Duration::days(1) {
+                        key.ratelimited_at = None;
+                        false
+                    } else {
+                        true
+                    }
+                }
+            };
+
+            let score = match is_expired {
+                true => {
+                    let remaining = chrono::Duration::days(1) - (current_time - key.ratelimited_at.unwrap());
+                    remaining.num_seconds()
+                }
+                false => -1,
+            };
+
+            match best_score {
+                None => {
+                    best_idx = Some(idx);
+                    best_score = Some(score);
+                }
+                Some(current_best) if score < current_best => {
+                    best_idx = Some(idx);
+                    best_score = Some(score);
+                }
+                _ => {}
             }
-
-            if !Self::is_ratelimited(&mut self.keys[next_index]) {
-                log::debug!(
-                    "Key {} is not ratelimited, returning it",
-                    self.keys[next_index].key
-                );
-                return Some(&self.keys[next_index]);
-            }
-
-            log::debug!(
-                "Key {} is ratelimited, trying next key",
-                self.keys[next_index].key
-            );
         }
+
+        best_idx
     }
 
-    /// ratelimits the current key and returns the next unratelimited key
     pub fn ratelimit(&mut self) -> Option<&Key> {
-        log::warn!("Ratelimiting key {}", self.keys[self.current_index].key);
-
-        let current_time = Utc::now().with_timezone(&Los_Angeles);
-
-        let current_key = &mut self.keys[self.current_index];
-        current_key.ratelimited_at = Some(current_time);
-
-        self.next_unratelimited()
-    }
-
-    /// returns the current key
-    pub fn current(&self) -> &Key {
-        let key = &self.keys[self.current_index];
-
-        log::debug!("Current key is {}", key.key);
-
-        key
-    }
-
-    fn is_ratelimited(key: &mut Key) -> bool {
-        let current_time = Utc::now().with_timezone(&Los_Angeles);
-
-        if let Some(ratelimited_at) = key.ratelimited_at {
-            if (current_time - ratelimited_at) > chrono::Duration::days(1) {
-                // key is no longer ratelimited
-                key.ratelimited_at = None;
-                false
-            } else {
-                // key is still ratelimited
-                true
-            }
+        if let Some(idx) = self.find_best_key() {
+            log::warn!("ratelimited key {} at index {}", self.keys[idx].key.cyan(), idx.to_string().cyan());
+            self.keys[idx].ratelimited_at = Some(Utc::now().with_timezone(&Los_Angeles));
+            self.select()
         } else {
-            // key was never ratelimited
-            false
+            log::warn!("all {} are ratelimited", "keys".bright_red().bold());
+            None
         }
+    }
+
+    pub fn current(&mut self) -> &Key {
+        let idx = self.find_best_key().unwrap_or(0);
+        &self.keys[idx]
     }
 }
