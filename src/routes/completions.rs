@@ -2,6 +2,7 @@ use actix_web::{Error, HttpResponse, post, web};
 use awc::http::StatusCode;
 use colored::Colorize;
 use futures_util::TryStreamExt;
+use log::error;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -28,7 +29,10 @@ async fn completion(
 
     let model = path.into_inner();
     let body = body.into_inner();
-    let is_streaming = body.get("stream").and_then(|v| v.as_bool()).unwrap_or(false);
+    let is_streaming = body
+        .get("stream")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     let mut juggler = data.juggler.write().await;
 
@@ -46,14 +50,18 @@ async fn handle_streaming(
     body: &Value,
 ) -> Result<HttpResponse, Error> {
     loop {
-        let key = juggler.current();
-        log::debug!("forwarding streaming request to {}, using key {}", "gemini".cyan(), key.to_string().cyan());
+        let key_str = juggler.current().to_string();
+        log::debug!(
+            "forwarding streaming request to {}, using key {}",
+            "gemini".cyan(),
+            key_str.cyan()
+        );
 
         let mut resp = data
             .client
             .post(format!(
                 "https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?key={}&alt=sse",
-                key
+                key_str
             ))
             .no_decompress()
             .send_json(body)
@@ -62,13 +70,26 @@ async fn handle_streaming(
 
         match resp.status() {
             StatusCode::TOO_MANY_REQUESTS => {
-                let body_bytes = resp
-                    .body()
-                    .await
-                    .map_err(|e| actix_web::error::ErrorBadGateway(format!("Error reading response: {}", e)))?;
+                let body_bytes = resp.body().await.map_err(|e| {
+                    actix_web::error::ErrorBadGateway(format!("Error reading response: {}", e))
+                })?;
 
-                if String::from_utf8_lossy(&body_bytes).to_lowercase().contains("day") {
-                    juggler.ratelimit().ok_or(actix_web::error::ErrorTooManyRequests("All API keys are ratelimited"))?;
+                if String::from_utf8_lossy(&body_bytes)
+                    .to_lowercase()
+                    .contains("day")
+                {
+                    juggler
+                        .ratelimit(&key_str)
+                        .ok_or(actix_web::error::ErrorTooManyRequests(
+                            "All API keys are ratelimited",
+                        ))?;
+                    continue;
+                }
+                if body_bytes.len() == 344 {
+                    error!(
+                        "received 344 byte body, indicating a broken key, removing from rotation and retrying..."
+                    );
+                    juggler.remove(&key_str);
                     continue;
                 }
                 return Ok(HttpResponse::build(StatusCode::TOO_MANY_REQUESTS).body(body_bytes));
@@ -79,10 +100,9 @@ async fn handle_streaming(
                 return Ok(response.streaming(stream));
             }
             status => {
-                let body_bytes = resp
-                    .body()
-                    .await
-                    .map_err(|e| actix_web::error::ErrorBadGateway(format!("Error reading response: {}", e)))?;
+                let body_bytes = resp.body().await.map_err(|e| {
+                    actix_web::error::ErrorBadGateway(format!("Error reading response: {}", e))
+                })?;
                 return Ok(HttpResponse::build(status).body(body_bytes));
             }
         }
@@ -96,14 +116,18 @@ async fn handle_non_streaming(
     body: &Value,
 ) -> Result<HttpResponse, Error> {
     loop {
-        let key = juggler.current();
-        log::debug!("forwarding request to {}, using key {}", "gemini".cyan(), key.to_string().cyan());
+        let key_str = juggler.current().to_string();
+        log::debug!(
+            "forwarding request to {}, using key {}",
+            "gemini".cyan(),
+            key_str.cyan()
+        );
 
         let mut resp = data
             .client
             .post(format!(
                 "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={}",
-                key
+                key_str
             ))
             .no_decompress()
             .send_json(body)
@@ -114,22 +138,34 @@ async fn handle_non_streaming(
 
         match status {
             StatusCode::TOO_MANY_REQUESTS => {
-                let body_bytes = resp
-                    .body()
-                    .await
-                    .map_err(|e| actix_web::error::ErrorBadGateway(format!("Error reading response: {}", e)))?;
+                let body_bytes = resp.body().await.map_err(|e| {
+                    actix_web::error::ErrorBadGateway(format!("Error reading response: {}", e))
+                })?;
 
-                if String::from_utf8_lossy(&body_bytes).to_lowercase().contains("day") {
-                    juggler.ratelimit().ok_or(actix_web::error::ErrorTooManyRequests("All API keys are ratelimited"))?;
+                if String::from_utf8_lossy(&body_bytes)
+                    .to_lowercase()
+                    .contains("day")
+                {
+                    juggler
+                        .ratelimit(&key_str)
+                        .ok_or(actix_web::error::ErrorTooManyRequests(
+                            "All API keys are ratelimited",
+                        ))?;
+                    continue;
+                }
+                if body_bytes.len() == 344 {
+                    error!(
+                        "received 344 byte body, indicating a broken key, removing from rotation and retrying..."
+                    );
+                    juggler.remove(&key_str);
                     continue;
                 }
                 return Ok(HttpResponse::build(status).body(body_bytes));
             }
             _ => {
-                let body_bytes = resp
-                    .body()
-                    .await
-                    .map_err(|e| actix_web::error::ErrorBadGateway(format!("Error reading response: {}", e)))?;
+                let body_bytes = resp.body().await.map_err(|e| {
+                    actix_web::error::ErrorBadGateway(format!("Error reading response: {}", e))
+                })?;
                 return Ok(HttpResponse::build(status).body(body_bytes));
             }
         }

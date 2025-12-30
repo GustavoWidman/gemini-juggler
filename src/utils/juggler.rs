@@ -4,6 +4,7 @@ use std::ops::Deref;
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use log::{debug, info};
+use rand::seq::SliceRandom;
 use serde::Serialize;
 
 pub struct Key {
@@ -55,9 +56,9 @@ impl KeyJuggler {
             keys.len().to_string().cyan().bold(),
             if keys.len() == 1 { "key" } else { "keys" }
         );
-        Self {
-            keys: keys.into_iter().map(Key::from).collect(),
-        }
+        let mut keys: Vec<Key> = keys.into_iter().map(Key::from).collect();
+        keys.shuffle(&mut rand::rng());
+        Self { keys }
     }
 
     pub fn select(&mut self) -> Option<&Key> {
@@ -117,8 +118,8 @@ impl KeyJuggler {
         best_idx
     }
 
-    pub fn ratelimit(&mut self) -> Option<&Key> {
-        if let Some(idx) = self.find_best_key() {
+    pub fn ratelimit(&mut self, key: &str) -> Option<&Key> {
+        if let Some(idx) = self.keys.iter().position(|k| k.key == key) {
             let request_count = self.keys[idx].num_requests;
             log::warn!(
                 "ratelimited key {} at index {} (handled {} {})",
@@ -135,8 +136,19 @@ impl KeyJuggler {
             self.keys[idx].num_requests = 0;
             self.select()
         } else {
-            log::warn!("all {} are ratelimited", "keys".bright_red().bold());
+            log::warn!("key not found for ratelimit");
             None
+        }
+    }
+
+    pub fn remove(&mut self, key: &str) {
+        if let Some(idx) = self.keys.iter().position(|k| k.key == key) {
+            log::warn!(
+                "removing key {} at index {} from rotation",
+                self.keys[idx].key.cyan(),
+                idx.to_string().cyan()
+            );
+            self.keys.remove(idx);
         }
     }
 

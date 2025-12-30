@@ -8,8 +8,7 @@ use serde::{Deserialize, Serialize};
 pub type Config = Arc<ConfigStore<ConfigInner>>;
 
 pub fn config(path: PathBuf) -> Result<Config> {
-    ConfigStore::<ConfigInner>::read(path, "config".to_string())
-        .map(|cs| cs.arc())
+    ConfigStore::<ConfigInner>::read(path, "config".to_string()).map(|cs| cs.arc())
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
