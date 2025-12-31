@@ -10,14 +10,14 @@ use tokio::sync::RwLock;
 mod routes;
 mod utils;
 
-use crate::utils::cli::Args;
 use crate::utils::config::config;
+use crate::utils::{Requester, cli::Args};
 use utils::{HttpLogger, KeyJuggler, Logger};
 
 #[derive(Clone)]
 pub struct AppState {
     config: utils::Config,
-    client: Arc<awc::Client>,
+    requester: Arc<Requester>,
     juggler: Arc<RwLock<KeyJuggler>>,
 }
 
@@ -26,7 +26,7 @@ impl AppState {
         Self {
             config: config.clone(),
             #[allow(clippy::arc_with_non_send_sync)]
-            client: Arc::new(awc::Client::builder().disable_timeout().finish()),
+            requester: Arc::new(Requester::new()),
             juggler,
         }
     }
@@ -59,6 +59,7 @@ async fn main() -> Result<()> {
                 shared_juggler.clone(),
             )))
             .service(routes::completion)
+            .service(routes::stream_completion)
             .service(routes::openai_completion)
             .service(routes::status)
     })

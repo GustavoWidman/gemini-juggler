@@ -1,7 +1,7 @@
-mod completions;
-mod openai_completions;
+mod gemini;
+mod openai;
 mod status;
 
-pub use completions::*;
-pub use openai_completions::*;
+pub use gemini::*;
+pub use openai::*;
 pub use status::*;
